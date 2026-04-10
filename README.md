@@ -1,4 +1,4 @@
-# Magnus Effect — Spinning Ball Physics Simulation
+# Magnus Effect, A Spinning Ball Physics Simulation
 
 An interactive 3D physics simulation of the Magnus Effect.
 
