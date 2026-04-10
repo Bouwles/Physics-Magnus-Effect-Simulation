@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magnus Effect – Spinning Ball Physics</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #000;
+    color: #e0e0e0;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+  canvas { display: block; }
+
+  #top-bar {
+    position: fixed;
+    top: 12px;
+    right: 14px;
+    z-index: 30;
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    padding: 7px 16px;
+    background: rgba(20,20,20,0.95);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 5px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 1;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(50,50,60,0.98); }
+  .btn.active { background: rgba(30,80,120,0.98); border-color: #64c8ff; }
+
+  #toggle-panel-btn {
+    position: fixed;
+    top: 12px;
+    left: 14px;
+    z-index: 30;
+  }
+
+  #panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 280px;
+    background: rgba(8, 10, 16, 0.88);
+    border-right: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(6px);
+    z-index: 20;
+    overflow-y: auto;
+    padding: 52px 14px 20px;
+    transition: transform 0.25s ease;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+  }
+  #panel.hidden { transform: translateX(-100%); }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    margin-bottom: 8px;
+    cursor: pointer;
+    color: #aac8ff;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .section-header .arrow { transition: transform 0.2s; }
+  .section-header.collapsed .arrow { transform: rotate(-90deg); }
+  .section-body { margin-bottom: 10px; }
+  .section-body.hidden { display: none; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .row label {
+    flex: 0 0 108px;
+    color: #c8d4e8;
+    font-size: 11px;
+  }
+  .row input[type=number], .row input[type=text] {
+    flex: 1;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 4px;
+    color: #fff;
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 11px;
+    width: 100%;
+  }
+  .row input[type=number]:focus, .row input[type=text]:focus {
+    outline: none;
+    border-color: #64c8ff;
+  }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .row input[type=checkbox] { width: 14px; height: 14px; accent-color: #64c8ff; }
+  .row .check-label { color: #a0b4cc; font-size: 11px; }
+
+  .row input[type=range] {
+    flex: 1;
+    accent-color: #64c8ff;
+    cursor: pointer;
+  }
+  .slider-val {
+    flex: 0 0 30px;
+    text-align: right;
+    color: #e8f0ff;
+    font-size: 11px;
+  }
+
+  #hud {
+    position: fixed;
+    bottom: 32px;
+    right: 14px;
+    z-index: 25;
+    background: rgba(8,10,16,0.75);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 10px 14px;
+    min-width: 200px;
+    backdrop-filter: blur(4px);
+  }
+  #hud .hud-title {
+    color: #64c8ff;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 4px;
+  }
+  #hud .hud-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 3px;
+  }
+  #hud .hud-lbl { color: #8899aa; }
+  #hud .hud-val { color: #e8f0ff; font-weight: bold; }
+
+  #status-badge {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    background: rgba(8,10,16,0.75);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 5px 16px;
+    font-size: 11px;
+    color: #64c8ff;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+  }
+
+  #credit {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 26;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    pointer-events: none;
+    letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<button class="btn" id="toggle-panel-btn">☰ Panel</button>
+
+<div id="top-bar">
+  <button class="btn" id="btn-launch">▶ Launch</button>
+  <button class="btn" id="btn-pause">⏸ Pause</button>
+  <button class="btn" id="btn-reset">↺ Reset</button>
+  <button class="btn" id="btn-follow">📍 Follow Ball</button>
+  <button class="btn" id="btn-topview">⬆ Top View</button>
+</div>
+
+<div id="status-badge">READY</div>
+
+<div id="hud">
+  <div class="hud-title">Live Telemetry</div>
+  <div class="hud-row"><span class="hud-lbl">Speed</span><span class="hud-val" id="hud-speed">0.00 m/s</span></div>
+  <div class="hud-row"><span class="hud-lbl">Angular ω</span><span class="hud-val" id="hud-omega">0.00 rad/s</span></div>
+  <div class="hud-row"><span class="hud-lbl">Position X</span><span class="hud-val" id="hud-px">0.00 m</span></div>
+  <div class="hud-row"><span class="hud-lbl">Position Y</span><span class="hud-val" id="hud-py">0.00 m</span></div>
+  <div class="hud-row"><span class="hud-lbl">Position Z</span><span class="hud-val" id="hud-pz">0.00 m</span></div>
+  <div class="hud-row"><span class="hud-lbl">Elapsed</span><span class="hud-val" id="hud-time">0.00 s</span></div>
+</div>
+
+<div id="credit">Made by Richard Abou Jamra</div>
+
+<div id="panel">
+
+  <div class="section-header" data-target="sec-controls">
+    <span>▼ Controls</span>
+  </div>
+  <div class="section-body" id="sec-controls">
+    <div class="row"><label>Fluid Density ρ (kg/m³)</label><input type="number" id="p-rho" value="1.225" step="0.01"></div>
+    <div class="row"><label>Mass (kg)</label><input type="number" id="p-mass" value="0.43" step="0.01"></div>
+    <div class="row"><label>Radius (m)</label><input type="number" id="p-radius" value="0.11" step="0.01"></div>
+    <div class="row"><label>Gravity (m/s²)</label><input type="number" id="p-gravity" value="9.81" step="0.01"></div>
+    <div class="row"><label>Viscosity μ</label><input type="number" id="p-viscosity" value="0.05" step="0.001"></div>
+  </div>
+
+  <div class="section-header" data-target="sec-pos">
+    <span>▼ Position (m)</span>
+  </div>
+  <div class="section-body" id="sec-pos">
+    <div class="row"><label>X</label><input type="number" id="p-px" value="0" step="0.1"></div>
+    <div class="row"><label>Y</label><input type="number" id="p-py" value="1" step="0.1"></div>
+    <div class="row"><label>Z</label><input type="number" id="p-pz" value="0" step="0.1"></div>
+  </div>
+
+  <div class="section-header" data-target="sec-vel">
+    <span>▼ Velocity (m/s)</span>
+  </div>
+  <div class="section-body" id="sec-vel">
+    <div class="row"><label>Vx</label><input type="number" id="p-vx" value="20" step="0.5"></div>
+    <div class="row"><label>Vy</label><input type="number" id="p-vy" value="10" step="0.5"></div>
+    <div class="row"><label>Vz</label><input type="number" id="p-vz" value="0" step="0.5"></div>
+    <div class="row"><input type="checkbox" id="p-vel-link"><span class="check-label">Link all axes</span></div>
+  </div>
+
+  <div class="section-header" data-target="sec-rot">
+    <span>▼ Rotation</span>
+  </div>
+  <div class="section-body" id="sec-rot">
+    <div class="row"><label>Angular Vel (rpm)</label><input type="number" id="p-rpm" value="1500" step="10"></div>
+    <div class="row"><label>Axis X</label><input type="number" id="p-ax" value="0" step="0.1"></div>
+    <div class="row"><label>Axis Y</label><input type="number" id="p-ay" value="1" step="0.1"></div>
+    <div class="row"><label>Axis Z</label><input type="number" id="p-az" value="0" step="0.1"></div>
+    <div class="row"><input type="checkbox" id="p-rot-link"><span class="check-label">Link all axes</span></div>
+  </div>
+
+  <div class="section-header" data-target="sec-vec">
+    <span>▼ Vectors</span>
+  </div>
+  <div class="section-body" id="sec-vec">
+    <div class="row"><input type="checkbox" id="v-velocity" checked><span class="check-label" style="color:#ff6644">■ Velocity Vector</span></div>
+    <div class="row"><input type="checkbox" id="v-gravity" checked><span class="check-label" style="color:#4488ff">■ Gravity Vector</span></div>
+    <div class="row"><input type="checkbox" id="v-drag" checked><span class="check-label" style="color:#44cc66">■ Drag Vector</span></div>
+    <div class="row"><input type="checkbox" id="v-magnus" checked><span class="check-label" style="color:#ffcc00">■ Magnus Vector</span></div>
+    <div class="row"><input type="checkbox" id="v-axes" checked><span class="check-label">■ Show Axes</span></div>
+  </div>
+
+  <div class="section-header" data-target="sec-cam">
+    <span>▼ Camera</span>
+  </div>
+  <div class="section-body" id="sec-cam">
+    <div class="row">
+      <label>Rotation Speed</label>
+      <input type="range" id="p-cam-sensitivity" min="0.1" max="3.0" step="0.1" value="0.2">
+      <span class="slider-val" id="p-cam-sensitivity-val">0.2</span>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+THREE.OrbitControls = function(object, domElement){
+  this.object = object;
+  this.domElement = domElement || document;
+  this.enabled = true;
+  this.target = new THREE.Vector3();
+  this.minDistance = 0; this.maxDistance = Infinity;
+  this.minPolarAngle = 0; this.maxPolarAngle = Math.PI;
+  this.enableDamping = true; this.dampingFactor = 0.08;
+  this.enableZoom = true; this.zoomSpeed = 1.0;
+  this.enableRotate = true; this.rotateSpeed = 1.0;
+  this.enablePan = true; this.panSpeed = 1.0;
+  this.autoRotate = false; this.autoRotateSpeed = 2.0;
+
+  var scope = this;
+  var STATE = { NONE:-1, ROTATE:0, DOLLY:1, PAN:2 };
+  var state = STATE.NONE;
+
+  var EPS = 0.000001;
+  var spherical = new THREE.Spherical();
+  var sphericalDelta = new THREE.Spherical();
+  var scale = 1;
+  var panOffset = new THREE.Vector3();
+  var zoomChanged = false;
+  var rotateStart = new THREE.Vector2();
+  var rotateEnd = new THREE.Vector2();
+  var rotateDelta = new THREE.Vector2();
+  var panStart = new THREE.Vector2();
+  var panEnd = new THREE.Vector2();
+  var panDelta = new THREE.Vector2();
+  var dollyStart = new THREE.Vector2();
+  var dollyEnd = new THREE.Vector2();
+  var dollyDelta = new THREE.Vector2();
+
+  function getZoomScale(){ return Math.pow(0.95, scope.zoomSpeed); }
+  function rotateLeft(angle){ sphericalDelta.theta -= angle; }
+  function rotateUp(angle){ sphericalDelta.phi -= angle; }
+
+  var panLeftV = new THREE.Vector3();
+  function panLeft(distance, objectMatrix){
+    panLeftV.setFromMatrixColumn(objectMatrix, 0);
+    panLeftV.multiplyScalar(-distance);
+    panOffset.add(panLeftV);
+  }
+  var panUpV = new THREE.Vector3();
+  function panUp(distance, objectMatrix){
+    panUpV.setFromMatrixColumn(objectMatrix, 1);
+    panUpV.multiplyScalar(distance);
+    panOffset.add(panUpV);
+  }
+  var panInternalV = new THREE.Vector3();
+  function pan(deltaX, deltaY){
+    var el = scope.domElement === document ? scope.domElement.body : scope.domElement;
+    panLeft(2*deltaX*panInternalV.subVectors(scope.object.position,scope.target).length()/el.clientHeight, scope.object.matrix);
+    panUp(2*deltaY*panInternalV.subVectors(scope.object.position,scope.target).length()/el.clientHeight, scope.object.matrix);
+  }
+
+  function dollyIn(dollyScale){ scale /= dollyScale; zoomChanged = true; }
+  function dollyOut(dollyScale){ scale *= dollyScale; zoomChanged = true; }
+
+  this.update = function(){
+    var offset = new THREE.Vector3();
+    var quat = new THREE.Quaternion().setFromUnitVectors(object.up, new THREE.Vector3(0,1,0));
+    var quatInverse = quat.clone().invert();
+    var lastPosition = new THREE.Vector3();
+    var lastQuaternion = new THREE.Quaternion();
+
+    return function update(){
+      var position = scope.object.position;
+      offset.copy(position).sub(scope.target);
+      offset.applyQuaternion(quat);
+      spherical.setFromVector3(offset);
+      if(scope.autoRotate && state === STATE.NONE)
+        rotateLeft(2*Math.PI/60/60*scope.autoRotateSpeed);
+      spherical.theta += sphericalDelta.theta;
+      spherical.phi += sphericalDelta.phi;
+      spherical.phi = Math.max(scope.minPolarAngle, Math.min(scope.maxPolarAngle, spherical.phi));
+      spherical.makeSafe();
+      spherical.radius *= scale;
+      spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius));
+      scope.target.add(panOffset);
+      offset.setFromSpherical(spherical);
+      offset.applyQuaternion(quatInverse);
+      position.copy(scope.target).add(offset);
+      scope.object.lookAt(scope.target);
+      if(scope.enableDamping){
+        sphericalDelta.theta *= (1-scope.dampingFactor);
+        sphericalDelta.phi *= (1-scope.dampingFactor);
+        panOffset.multiplyScalar(1-scope.dampingFactor);
+      } else {
+        sphericalDelta.set(0,0,0);
+        panOffset.set(0,0,0);
+      }
+      scale = 1;
+      if(zoomChanged || lastPosition.distanceToSquared(scope.object.position)>EPS
+        || 8*(1-lastQuaternion.dot(scope.object.quaternion))>EPS){
+        lastPosition.copy(scope.object.position);
+        lastQuaternion.copy(scope.object.quaternion);
+        zoomChanged = false;
+        return true;
+      }
+      return false;
+    };
+  }();
+
+  this.dispose = function(){
+    scope.domElement.removeEventListener('contextmenu', onContextMenu);
+    scope.domElement.removeEventListener('mousedown', onMouseDown);
+    scope.domElement.removeEventListener('wheel', onMouseWheel);
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+
+  function onMouseDown(event){
+    if(!scope.enabled) return;
+    event.preventDefault();
+    if(event.button===0){ state=STATE.ROTATE; rotateStart.set(event.clientX,event.clientY); }
+    else if(event.button===1){ state=STATE.DOLLY; dollyStart.set(event.clientX,event.clientY); }
+    else if(event.button===2){ state=STATE.PAN; panStart.set(event.clientX,event.clientY); }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+  function onMouseMove(event){
+    if(!scope.enabled) return;
+    if(state===STATE.ROTATE){
+      rotateEnd.set(event.clientX,event.clientY);
+      rotateDelta.subVectors(rotateEnd,rotateStart).multiplyScalar(scope.rotateSpeed);
+      var el = scope.domElement===document?scope.domElement.body:scope.domElement;
+      rotateLeft(2*Math.PI*rotateDelta.x/el.clientHeight);
+      rotateUp(2*Math.PI*rotateDelta.y/el.clientHeight);
+      rotateStart.copy(rotateEnd);
+    } else if(state===STATE.DOLLY){
+      dollyEnd.set(event.clientX,event.clientY);
+      dollyDelta.subVectors(dollyEnd,dollyStart);
+      if(dollyDelta.y>0) dollyIn(getZoomScale()); else if(dollyDelta.y<0) dollyOut(getZoomScale());
+      dollyStart.copy(dollyEnd);
+    } else if(state===STATE.PAN){
+      panEnd.set(event.clientX,event.clientY);
+      panDelta.subVectors(panEnd,panStart).multiplyScalar(scope.panSpeed);
+      pan(panDelta.x, panDelta.y);
+      panStart.copy(panEnd);
+    }
+  }
+  function onMouseUp(){ document.removeEventListener('mousemove',onMouseMove); document.removeEventListener('mouseup',onMouseUp); state=STATE.NONE; }
+  function onMouseWheel(event){
+    if(!scope.enabled||!scope.enableZoom) return;
+    event.preventDefault();
+    if(event.deltaY<0) dollyOut(getZoomScale()); else dollyIn(getZoomScale());
+  }
+  function onContextMenu(event){ event.preventDefault(); }
+
+  scope.domElement.addEventListener('contextmenu', onContextMenu);
+  scope.domElement.addEventListener('mousedown', onMouseDown);
+  scope.domElement.addEventListener('wheel', onMouseWheel, {passive:false});
+
+  this.update();
+};
+})();
+</script>
+
+<script>
+const $ = id => document.getElementById(id);
+const numVal = id => parseFloat($(id).value) || 0;
+
+const container = $('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080a10);
+scene.fog = new THREE.Fog(0x080a10, 80, 200);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 500);
+camera.position.set(-18, 12, 22);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(8, 0, 0);
+controls.enableDamping = true;
+controls.panSpeed = 3.0;
+controls.zoomSpeed = 3.0;
+controls.rotateSpeed = 0.2;
+controls.update();
+
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+const ambientLight = new THREE.AmbientLight(0x223344, 0.8);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xfff4d0, 1.2);
+sunLight.position.set(30, 50, 20);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 200;
+sunLight.shadow.camera.left = -60;
+sunLight.shadow.camera.right = 60;
+sunLight.shadow.camera.top = 60;
+sunLight.shadow.camera.bottom = -60;
+scene.add(sunLight);
+
+const fillLight = new THREE.DirectionalLight(0x334466, 0.4);
+fillLight.position.set(-20, 10, -10);
+scene.add(fillLight);
+
+const GROUND_SIZE = 200;
+
+function makeGrassTexture(){
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2d5a1b';
+  ctx.fillRect(0,0,size,size);
+  for(let i=0;i<800;i++){
+    const x = Math.random()*size;
+    const y = Math.random()*size;
+    const r = 4 + Math.random()*18;
+    const lightness = 20 + Math.random()*40;
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = `hsl(${100+Math.random()*30}, ${40+Math.random()*30}%, ${lightness}%)`;
+    ctx.globalAlpha = 0.15 + Math.random()*0.25;
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  for(let i=0;i<3000;i++){
+    const x = Math.random()*size;
+    const y = Math.random()*size;
+    const len = 4 + Math.random()*10;
+    const angle = -Math.PI/2 + (Math.random()-0.5)*0.6;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle)*len, y + Math.sin(angle)*len);
+    ctx.strokeStyle = `hsl(${90+Math.random()*40}, ${50+Math.random()*30}%, ${18+Math.random()*30}%)`;
+    ctx.lineWidth = 0.8 + Math.random()*0.8;
+    ctx.globalAlpha = 0.4 + Math.random()*0.5;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for(let x=0;x<=size;x+=64){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,size); ctx.stroke();
+  }
+  for(let y=0;y<=size;y+=64){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(size,y); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(20, 20);
+  return tex;
+}
+
+const groundGeo = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 1, 1);
+const groundMat = new THREE.MeshLambertMaterial({ map: makeGrassTexture(), color: 0xffffff });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const skyGeo = new THREE.SphereGeometry(490, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  vertexShader: `
+    varying vec3 vWorldPos;
+    void main(){ vWorldPos = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }
+  `,
+  fragmentShader: `
+    varying vec3 vWorldPos;
+    void main(){
+      float t = clamp((normalize(vWorldPos).y + 0.05)*4.0, 0.0, 1.0);
+      vec3 topColor = vec3(0.03,0.06,0.12);
+      vec3 horizColor = vec3(0.12,0.16,0.22);
+      gl_FragColor = vec4(mix(horizColor, topColor, t), 1.0);
+    }
+  `
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+function makeBallTexture(){
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#dce0e8';
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = '#aab0be';
+  ctx.lineWidth = 3;
+  for(let i=0;i<6;i++){
+    ctx.beginPath();
+    ctx.moveTo(0, i*size/5);
+    ctx.lineTo(size, i*size/5 + size/10);
+    ctx.stroke();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+const ballGeo = new THREE.SphereGeometry(1, 32, 32);
+const ballMat = new THREE.MeshPhongMaterial({
+  map: makeBallTexture(),
+  shininess: 60,
+  specular: new THREE.Color(0x445566)
+});
+const ball = new THREE.Mesh(ballGeo, ballMat);
+ball.castShadow = true;
+scene.add(ball);
+
+const axesHelper = new THREE.AxesHelper(3);
+scene.add(axesHelper);
+
+function makeArrow(color){
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1, color, 0.3, 0.15);
+  scene.add(arrow);
+  return arrow;
+}
+
+const arrowVelocity = makeArrow(0xff5522);
+const arrowGravity  = makeArrow(0x3399ff);
+const arrowDrag     = makeArrow(0x44cc66);
+const arrowMagnus   = makeArrow(0xffcc00);
+
+const MAX_TRAIL = 3000;
+const trailPositions = new Float32Array(MAX_TRAIL * 3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+trailGeo.setDrawRange(0, 0);
+const trailMat = new THREE.LineBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.92, linewidth: 3 });
+const trailLine = new THREE.Line(trailGeo, trailMat);
+scene.add(trailLine);
+
+const groundTrailPositions = new Float32Array(MAX_TRAIL * 3);
+const groundTrailGeo = new THREE.BufferGeometry();
+groundTrailGeo.setAttribute('position', new THREE.BufferAttribute(groundTrailPositions, 3));
+groundTrailGeo.setDrawRange(0, 0);
+const groundTrailMat = new THREE.LineBasicMaterial({ color: 0xff6622, transparent: true, opacity: 0.72, linewidth: 3 });
+const groundTrailLine = new THREE.Line(groundTrailGeo, groundTrailMat);
+scene.add(groundTrailLine);
+
+let trailCount = 0;
+
+function resetTrail(){
+  trailCount = 0;
+  trailGeo.setDrawRange(0, 0);
+  trailGeo.attributes.position.needsUpdate = true;
+  groundTrailGeo.setDrawRange(0, 0);
+  groundTrailGeo.attributes.position.needsUpdate = true;
+}
+
+function addTrailPoint(x, y, z){
+  if(trailCount >= MAX_TRAIL) return;
+  trailPositions[trailCount*3]     = x;
+  trailPositions[trailCount*3+1]   = y;
+  trailPositions[trailCount*3+2]   = z;
+  groundTrailPositions[trailCount*3]   = x;
+  groundTrailPositions[trailCount*3+1] = 0.01;
+  groundTrailPositions[trailCount*3+2] = z;
+  trailCount++;
+  trailGeo.setDrawRange(0, trailCount);
+  trailGeo.attributes.position.needsUpdate = true;
+  groundTrailGeo.setDrawRange(0, trailCount);
+  groundTrailGeo.attributes.position.needsUpdate = true;
+}
+
+let simState = {
+  active: false,
+  paused: false,
+  pos: new THREE.Vector3(),
+  vel: new THREE.Vector3(),
+  omega: new THREE.Vector3(),
+  time: 0,
+  rho: 1.225, mass: 0.43, radius: 0.11, gravity: 9.81, viscosity: 0.05,
+  Cd: 0.47, CL: 0.33,
+  area: 0,
+  fGrav: new THREE.Vector3(),
+  fDrag: new THREE.Vector3(),
+  fMagnus: new THREE.Vector3()
+};
+
+function updatePhysics(dt){
+  const s = simState;
+  if(!s.active || s.paused) return;
+  if(dt <= 0) return;
+
+  const { rho, mass, radius, gravity, viscosity, Cd, CL } = s;
+  const A = Math.PI * radius * radius;
+
+  s.fGrav.set(0, -mass * gravity, 0);
+
+  const speed = s.vel.length();
+  if(speed > 1e-6){
+    const dragMag = 0.5 * rho * Cd * A * speed * speed;
+    s.fDrag.copy(s.vel).normalize().multiplyScalar(-dragMag);
+  } else {
+    s.fDrag.set(0, 0, 0);
+  }
+
+  const omegaXvel = new THREE.Vector3().crossVectors(s.omega, s.vel);
+  const magnusMag = 0.5 * rho * CL * A * radius;
+  s.fMagnus.copy(omegaXvel).multiplyScalar(magnusMag);
+
+  const fNet = new THREE.Vector3().add(s.fGrav).add(s.fDrag).add(s.fMagnus);
+  const accel = fNet.divideScalar(mass);
+
+  s.vel.addScaledVector(accel, dt);
+  s.pos.addScaledVector(s.vel, dt);
+
+  const decayFactor = 1.0 - viscosity * dt;
+  s.omega.multiplyScalar(Math.max(0, decayFactor));
+
+  const omegaMag = s.omega.length();
+  if(omegaMag > 1e-6){
+    const rotAxis = s.omega.clone().normalize();
+    const quat = new THREE.Quaternion().setFromAxisAngle(rotAxis, omegaMag * dt);
+    ball.quaternion.multiplyQuaternions(quat, ball.quaternion);
+  }
+
+  s.time += dt;
+
+  if(s.pos.y <= 0){
+    s.pos.y = 0;
+    s.vel.set(0,0,0);
+    s.omega.set(0,0,0);
+    s.active = false;
+    setStatus('LANDED');
+  }
+}
+
+const ARROW_SCALE = 0.12;
+
+function updateArrows(){
+  const s = simState;
+  const origin = s.pos;
+
+  function setArrow(arrow, force, show){
+    arrow.visible = show;
+    if(!show) return;
+    const len = force.length() * ARROW_SCALE;
+    if(len < 0.01){ arrow.visible = false; return; }
+    arrow.position.copy(origin);
+    arrow.setDirection(force.clone().normalize());
+    arrow.setLength(Math.min(len, 8), 0.4, 0.2);
+  }
+
+  setArrow(arrowVelocity, s.vel,     $('v-velocity').checked);
+  setArrow(arrowGravity,  s.fGrav,   $('v-gravity').checked);
+  setArrow(arrowDrag,     s.fDrag,   $('v-drag').checked);
+  setArrow(arrowMagnus,   s.fMagnus, $('v-magnus').checked);
+}
+
+function updateHUD(){
+  const s = simState;
+  $('hud-speed').textContent = s.vel.length().toFixed(2) + ' m/s';
+  $('hud-omega').textContent = s.omega.length().toFixed(2) + ' rad/s';
+  $('hud-px').textContent    = s.pos.x.toFixed(2) + ' m';
+  $('hud-py').textContent    = s.pos.y.toFixed(2) + ' m';
+  $('hud-pz').textContent    = s.pos.z.toFixed(2) + ' m';
+  $('hud-time').textContent  = s.time.toFixed(2) + ' s';
+}
+
+function setStatus(text){
+  $('status-badge').textContent = text;
+}
+
+function launch(){
+  const s = simState;
+  s.rho       = numVal('p-rho');
+  s.mass      = numVal('p-mass');
+  s.radius    = numVal('p-radius');
+  s.gravity   = numVal('p-gravity');
+  s.viscosity = numVal('p-viscosity');
+  s.pos.set(numVal('p-px'), numVal('p-py'), numVal('p-pz'));
+  s.vel.set(numVal('p-vx'), numVal('p-vy'), numVal('p-vz'));
+  const rpm = numVal('p-rpm');
+  const omegaMag = rpm * (2 * Math.PI / 60);
+  const axis = new THREE.Vector3(numVal('p-ax'), numVal('p-ay'), numVal('p-az'));
+  if(axis.length() < 1e-6) axis.set(0, 1, 0);
+  axis.normalize();
+  s.omega.copy(axis).multiplyScalar(omegaMag);
+  ball.scale.setScalar(s.radius);
+  resetTrail();
+  s.time = 0;
+  s.active = true;
+  s.paused = false;
+  ball.position.copy(s.pos);
+  setStatus('IN FLIGHT');
+}
+
+function reset(){
+  simState.active = false;
+  simState.paused = false;
+  simState.vel.set(0,0,0);
+  simState.omega.set(0,0,0);
+  simState.time = 0;
+  ball.scale.setScalar(numVal('p-radius'));
+  ball.position.set(numVal('p-px'), numVal('p-py'), numVal('p-pz'));
+  simState.pos.copy(ball.position);
+  simState.fGrav.set(0,0,0);
+  simState.fDrag.set(0,0,0);
+  simState.fMagnus.set(0,0,0);
+  [arrowVelocity,arrowGravity,arrowDrag,arrowMagnus].forEach(a=>a.visible=false);
+  resetTrail();
+  setStatus('READY');
+}
+
+let lastTimestamp = null;
+const MAX_DT = 0.02;
+
+function render(timestamp){
+  requestAnimationFrame(render);
+  if(lastTimestamp === null) lastTimestamp = timestamp;
+  const rawDt = (timestamp - lastTimestamp) / 1000;
+  lastTimestamp = timestamp;
+  const dt = Math.min(rawDt, MAX_DT);
+  if(simState.active && !simState.paused){
+    updatePhysics(dt);
+    ball.position.copy(simState.pos);
+    addTrailPoint(simState.pos.x, simState.pos.y, simState.pos.z);
+  }
+  updateArrows();
+  axesHelper.visible = $('v-axes').checked;
+  updateHUD();
+  processKeys();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+document.querySelectorAll('.section-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const target = $(header.dataset.target);
+    const isHidden = target.classList.contains('hidden');
+    target.classList.toggle('hidden');
+    const span = header.querySelector('span');
+    if(span){
+      span.textContent = span.textContent.replace(/[▼▶]/, isHidden ? '▼' : '▶');
+    }
+  });
+});
+
+function setupLink(checkId, inputIds){
+  const check = $(checkId);
+  inputIds.forEach(id => {
+    $(id).addEventListener('input', () => {
+      if(check.checked){
+        const v = $(id).value;
+        inputIds.forEach(oid => { if(oid !== id) $(oid).value = v; });
+      }
+    });
+  });
+}
+setupLink('p-vel-link', ['p-vx','p-vy','p-vz']);
+setupLink('p-rot-link', ['p-ax','p-ay','p-az']);
+
+$('btn-launch').addEventListener('click', launch);
+$('btn-reset').addEventListener('click', reset);
+$('btn-pause').addEventListener('click', () => {
+  if(!simState.active) return;
+  simState.paused = !simState.paused;
+  $('btn-pause').textContent = simState.paused ? '▶ Resume' : '⏸ Pause';
+  setStatus(simState.paused ? 'PAUSED' : 'IN FLIGHT');
+});
+$('toggle-panel-btn').addEventListener('click', () => {
+  $('panel').classList.toggle('hidden');
+});
+
+$('btn-follow').addEventListener('click', () => {
+  const offset = new THREE.Vector3(6, 3, 6);
+  camera.position.copy(simState.pos).add(offset);
+  controls.target.copy(simState.pos);
+  controls.update();
+});
+
+$('btn-topview').addEventListener('click', () => {
+  const bp = simState.pos;
+  controls.target.set(bp.x, bp.y, bp.z);
+  camera.position.set(bp.x, bp.y + 25, bp.z + 0.001);
+  controls.update();
+});
+
+const keysDown = new Set();
+window.addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT') return;
+  keysDown.add(e.code);
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => keysDown.delete(e.code));
+
+function processKeys(){
+  const MOVE_SPEED = 0.3;
+  const ROT_SPEED  = 0.02;
+
+  if(keysDown.has('KeyW') || keysDown.has('KeyA') || keysDown.has('KeyS') || keysDown.has('KeyD')){
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if(forward.lengthSq() > 0) forward.normalize();
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+    const move = new THREE.Vector3();
+    if(keysDown.has('KeyW')) move.addScaledVector(forward,  MOVE_SPEED);
+    if(keysDown.has('KeyS')) move.addScaledVector(forward, -MOVE_SPEED);
+    if(keysDown.has('KeyA')) move.addScaledVector(right,   -MOVE_SPEED);
+    if(keysDown.has('KeyD')) move.addScaledVector(right,    MOVE_SPEED);
+
+    camera.position.add(move);
+    controls.target.add(move);
+  }
+
+  if(keysDown.has('ArrowLeft') || keysDown.has('ArrowRight') || keysDown.has('ArrowUp') || keysDown.has('ArrowDown')){
+    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+
+    if(keysDown.has('ArrowLeft') || keysDown.has('ArrowRight')){
+      const theta = keysDown.has('ArrowLeft') ? ROT_SPEED : -ROT_SPEED;
+      offset.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), theta));
+    }
+
+    if(keysDown.has('ArrowUp') || keysDown.has('ArrowDown')){
+      const right = new THREE.Vector3().crossVectors(offset, new THREE.Vector3(0,1,0)).normalize();
+      const phi = keysDown.has('ArrowUp') ? -ROT_SPEED : ROT_SPEED;
+      const rotated = offset.clone().applyQuaternion(new THREE.Quaternion().setFromAxisAngle(right, phi));
+      const sph = new THREE.Spherical().setFromVector3(rotated);
+      if(sph.phi >= controls.minPolarAngle + 0.01 && sph.phi <= controls.maxPolarAngle - 0.01){
+        offset.copy(rotated);
+      }
+    }
+
+    camera.position.copy(controls.target).add(offset);
+  }
+}
+
+const sensitivitySlider = $('p-cam-sensitivity');
+const sensitivityVal    = $('p-cam-sensitivity-val');
+sensitivitySlider.addEventListener('input', () => {
+  const v = parseFloat(sensitivitySlider.value);
+  sensitivityVal.textContent = v.toFixed(1);
+  controls.rotateSpeed = v;
+});
+
+reset();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
