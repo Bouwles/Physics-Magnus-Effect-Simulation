@@ -846,7 +846,7 @@ function render(timestamp){
   renderer.render(scene, camera);
 }
 
-document.querySelectorAll('#panel input, #panel .section-header').forEach(el => {
+document.querySelectorAll('#panel input[type=checkbox], #panel input[type=range], #panel .section-header').forEach(el => {
   el.addEventListener('click', () => el.blur());
 });
 
