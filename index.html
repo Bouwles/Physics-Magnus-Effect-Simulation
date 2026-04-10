@@ -268,7 +268,17 @@
     <div class="row"><input type="checkbox" id="v-axes" checked><span class="check-label">■ Show Axes</span></div>
     <div class="row"><input type="checkbox" id="v-spinaxis"><span class="check-label" style="color:#cc44ff">■ Spin Axis Vector</span></div>
     <div class="row"><input type="checkbox" id="v-trail" checked><span class="check-label" style="color:#aaddff">■ Ball Trail</span></div>
+    <div class="row">
+      <label style="color:#aaddff">Trail Size</label>
+      <input type="range" id="s-trail-opacity" min="1" max="10" step="1" value="4">
+      <span class="slider-val" id="s-trail-opacity-val">4</span>
+    </div>
     <div class="row"><input type="checkbox" id="v-ground-trail" checked><span class="check-label" style="color:#ff6622">■ Ground Trail</span></div>
+    <div class="row">
+      <label style="color:#ff6622">Trail Size</label>
+      <input type="range" id="s-ground-opacity" min="1" max="10" step="1" value="3">
+      <span class="slider-val" id="s-ground-opacity-val">3</span>
+    </div>
   </div>
 
   <div class="section-header" data-target="sec-cam">
@@ -624,16 +634,18 @@ const trailPositions = new Float32Array(MAX_TRAIL * 3);
 const trailGeo = new THREE.BufferGeometry();
 trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
 trailGeo.setDrawRange(0, 0);
-const trailMat = new THREE.LineBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.92, linewidth: 3 });
-const trailLine = new THREE.Line(trailGeo, trailMat);
+const trailMat = new THREE.PointsMaterial({ color: 0xaaddff, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.92 });
+const trailLine = new THREE.Points(trailGeo, trailMat);
+trailLine.frustumCulled = false;
 scene.add(trailLine);
 
 const groundTrailPositions = new Float32Array(MAX_TRAIL * 3);
 const groundTrailGeo = new THREE.BufferGeometry();
 groundTrailGeo.setAttribute('position', new THREE.BufferAttribute(groundTrailPositions, 3));
 groundTrailGeo.setDrawRange(0, 0);
-const groundTrailMat = new THREE.LineBasicMaterial({ color: 0xff6622, transparent: true, opacity: 0.72, linewidth: 3 });
-const groundTrailLine = new THREE.Line(groundTrailGeo, groundTrailMat);
+const groundTrailMat = new THREE.PointsMaterial({ color: 0xff6622, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.85 });
+const groundTrailLine = new THREE.Points(groundTrailGeo, groundTrailMat);
+groundTrailLine.frustumCulled = false;
 scene.add(groundTrailLine);
 
 let trailCount = 0;
@@ -707,6 +719,10 @@ function updatePhysics(dt){
   const decayFactor = 1.0 - viscosity * dt;
   s.omega.multiplyScalar(Math.max(0, decayFactor));
 
+  const I = 0.4 * mass * radius * radius;
+  const tauPrecess = new THREE.Vector3().crossVectors(s.vel, s.omega).multiplyScalar(rho * CL * A * radius * radius / I);
+  s.omega.addScaledVector(tauPrecess, dt);
+
   const omegaMag = s.omega.length();
   if(omegaMag > 1e-6){
     const rotAxis = s.omega.clone().normalize();
@@ -746,10 +762,17 @@ function updateArrows(){
   setArrow(arrowDrag,     s.fDrag,   $('v-drag').checked);
   setArrow(arrowMagnus,   s.fMagnus, $('v-magnus').checked);
 
-  const showSpin = $('v-spinaxis').checked && s.omega.length() > 1e-6;
+  const showSpin = $('v-spinaxis').checked;
   arrowSpinAxis.visible = showSpin;
   if(showSpin){
-    const spinDir = s.omega.clone().normalize();
+    let spinDir;
+    if(s.omega.length() > 1e-6){
+      spinDir = s.omega.clone().normalize();
+    } else {
+      spinDir = new THREE.Vector3(numVal('p-ax'), numVal('p-ay'), numVal('p-az'));
+      if(spinDir.length() < 1e-6) spinDir.set(0, 1, 0);
+      spinDir.normalize();
+    }
     arrowSpinAxis.position.copy(origin);
     arrowSpinAxis.setDirection(spinDir);
     arrowSpinAxis.setLength(4, 0.5, 0.25);
@@ -771,9 +794,17 @@ function updateHUD(){
     $('hud-ay').textContent = ax.y.toFixed(3);
     $('hud-az').textContent = ax.z.toFixed(3);
   } else {
-    $('hud-ax').textContent = '—';
-    $('hud-ay').textContent = '—';
-    $('hud-az').textContent = '—';
+    const configAxis = new THREE.Vector3(numVal('p-ax'), numVal('p-ay'), numVal('p-az'));
+    if(configAxis.length() > 1e-6){
+      configAxis.normalize();
+      $('hud-ax').textContent = configAxis.x.toFixed(3);
+      $('hud-ay').textContent = configAxis.y.toFixed(3);
+      $('hud-az').textContent = configAxis.z.toFixed(3);
+    } else {
+      $('hud-ax').textContent = '—';
+      $('hud-ay').textContent = '—';
+      $('hud-az').textContent = '—';
+    }
   }
 }
 
@@ -959,6 +990,18 @@ sensitivitySlider.addEventListener('input', () => {
   const v = parseFloat(sensitivitySlider.value);
   sensitivityVal.textContent = v.toFixed(1);
   controls.rotateSpeed = v;
+});
+
+$('s-trail-opacity').addEventListener('input', function(){
+  const v = parseInt(this.value);
+  $('s-trail-opacity-val').textContent = v;
+  trailMat.size = v;
+});
+
+$('s-ground-opacity').addEventListener('input', function(){
+  const v = parseInt(this.value);
+  $('s-ground-opacity-val').textContent = v;
+  groundTrailMat.size = v;
 });
 
 reset();
