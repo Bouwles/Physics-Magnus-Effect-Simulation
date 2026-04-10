@@ -117,7 +117,8 @@
   }
   input[type=number]::-webkit-outer-spin-button,
   input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-  .row input[type=checkbox] { width: 14px; height: 14px; accent-color: #64c8ff; }
+  .row input[type=checkbox] { width: 14px; height: 14px; accent-color: #64c8ff; cursor: pointer; }
+  .row input[type=checkbox]:focus { outline: none; }
   .row .check-label { color: #a0b4cc; font-size: 11px; }
 
   .row input[type=range] {
@@ -162,20 +163,10 @@
   #hud .hud-lbl { color: #8899aa; }
   #hud .hud-val { color: #e8f0ff; font-weight: bold; }
 
-  #status-badge {
-    position: fixed;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 25;
-    background: rgba(8,10,16,0.75);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 20px;
-    padding: 5px 16px;
-    font-size: 11px;
-    color: #64c8ff;
-    letter-spacing: 0.05em;
-    pointer-events: none;
+  .hud-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    margin: 5px 0;
   }
 
   #credit {
@@ -204,16 +195,21 @@
   <button class="btn" id="btn-topview">⬆ Top View</button>
 </div>
 
-<div id="status-badge">READY</div>
-
 <div id="hud">
   <div class="hud-title">Live Telemetry</div>
+  <div class="hud-row"><span class="hud-lbl">Status</span><span class="hud-val" id="hud-status" style="color:#64c8ff">READY</span></div>
+  <div class="hud-row"><span class="hud-lbl">Elapsed</span><span class="hud-val" id="hud-time">0.00 s</span></div>
+  <hr class="hud-divider">
   <div class="hud-row"><span class="hud-lbl">Speed</span><span class="hud-val" id="hud-speed">0.00 m/s</span></div>
   <div class="hud-row"><span class="hud-lbl">Angular ω</span><span class="hud-val" id="hud-omega">0.00 rad/s</span></div>
+  <hr class="hud-divider">
   <div class="hud-row"><span class="hud-lbl">Position X</span><span class="hud-val" id="hud-px">0.00 m</span></div>
   <div class="hud-row"><span class="hud-lbl">Position Y</span><span class="hud-val" id="hud-py">0.00 m</span></div>
   <div class="hud-row"><span class="hud-lbl">Position Z</span><span class="hud-val" id="hud-pz">0.00 m</span></div>
-  <div class="hud-row"><span class="hud-lbl">Elapsed</span><span class="hud-val" id="hud-time">0.00 s</span></div>
+  <hr class="hud-divider">
+  <div class="hud-row"><span class="hud-lbl">Spin Axis X</span><span class="hud-val" id="hud-ax">0.00</span></div>
+  <div class="hud-row"><span class="hud-lbl">Spin Axis Y</span><span class="hud-val" id="hud-ay">0.00</span></div>
+  <div class="hud-row"><span class="hud-lbl">Spin Axis Z</span><span class="hud-val" id="hud-az">0.00</span></div>
 </div>
 
 <div id="credit">Made by Richard Abou Jamra</div>
@@ -270,6 +266,9 @@
     <div class="row"><input type="checkbox" id="v-drag" checked><span class="check-label" style="color:#44cc66">■ Drag Vector</span></div>
     <div class="row"><input type="checkbox" id="v-magnus" checked><span class="check-label" style="color:#ffcc00">■ Magnus Vector</span></div>
     <div class="row"><input type="checkbox" id="v-axes" checked><span class="check-label">■ Show Axes</span></div>
+    <div class="row"><input type="checkbox" id="v-spinaxis"><span class="check-label" style="color:#cc44ff">■ Spin Axis Vector</span></div>
+    <div class="row"><input type="checkbox" id="v-trail" checked><span class="check-label" style="color:#aaddff">■ Ball Trail</span></div>
+    <div class="row"><input type="checkbox" id="v-ground-trail" checked><span class="check-label" style="color:#ff6622">■ Ground Trail</span></div>
   </div>
 
   <div class="section-header" data-target="sec-cam">
@@ -617,7 +616,8 @@ function makeArrow(color){
 const arrowVelocity = makeArrow(0xff5522);
 const arrowGravity  = makeArrow(0x3399ff);
 const arrowDrag     = makeArrow(0x44cc66);
-const arrowMagnus   = makeArrow(0xffcc00);
+const arrowMagnus    = makeArrow(0xffcc00);
+const arrowSpinAxis  = makeArrow(0xcc44ff);
 
 const MAX_TRAIL = 3000;
 const trailPositions = new Float32Array(MAX_TRAIL * 3);
@@ -745,6 +745,15 @@ function updateArrows(){
   setArrow(arrowGravity,  s.fGrav,   $('v-gravity').checked);
   setArrow(arrowDrag,     s.fDrag,   $('v-drag').checked);
   setArrow(arrowMagnus,   s.fMagnus, $('v-magnus').checked);
+
+  const showSpin = $('v-spinaxis').checked && s.omega.length() > 1e-6;
+  arrowSpinAxis.visible = showSpin;
+  if(showSpin){
+    const spinDir = s.omega.clone().normalize();
+    arrowSpinAxis.position.copy(origin);
+    arrowSpinAxis.setDirection(spinDir);
+    arrowSpinAxis.setLength(4, 0.5, 0.25);
+  }
 }
 
 function updateHUD(){
@@ -755,10 +764,21 @@ function updateHUD(){
   $('hud-py').textContent    = s.pos.y.toFixed(2) + ' m';
   $('hud-pz').textContent    = s.pos.z.toFixed(2) + ' m';
   $('hud-time').textContent  = s.time.toFixed(2) + ' s';
+  const omegaLen = s.omega.length();
+  if(omegaLen > 1e-6){
+    const ax = s.omega.clone().normalize();
+    $('hud-ax').textContent = ax.x.toFixed(3);
+    $('hud-ay').textContent = ax.y.toFixed(3);
+    $('hud-az').textContent = ax.z.toFixed(3);
+  } else {
+    $('hud-ax').textContent = '—';
+    $('hud-ay').textContent = '—';
+    $('hud-az').textContent = '—';
+  }
 }
 
 function setStatus(text){
-  $('status-badge').textContent = text;
+  $('hud-status').textContent = text;
 }
 
 function launch(){
@@ -797,7 +817,7 @@ function reset(){
   simState.fGrav.set(0,0,0);
   simState.fDrag.set(0,0,0);
   simState.fMagnus.set(0,0,0);
-  [arrowVelocity,arrowGravity,arrowDrag,arrowMagnus].forEach(a=>a.visible=false);
+  [arrowVelocity,arrowGravity,arrowDrag,arrowMagnus,arrowSpinAxis].forEach(a=>a.visible=false);
   resetTrail();
   setStatus('READY');
 }
@@ -817,12 +837,18 @@ function render(timestamp){
     addTrailPoint(simState.pos.x, simState.pos.y, simState.pos.z);
   }
   updateArrows();
-  axesHelper.visible = $('v-axes').checked;
+  axesHelper.visible    = $('v-axes').checked;
+  trailLine.visible       = $('v-trail').checked;
+  groundTrailLine.visible = $('v-ground-trail').checked;
   updateHUD();
   processKeys();
   controls.update();
   renderer.render(scene, camera);
 }
+
+document.querySelectorAll('#panel input, #panel .section-header').forEach(el => {
+  el.addEventListener('click', () => el.blur());
+});
 
 document.querySelectorAll('.section-header').forEach(header => {
   header.addEventListener('click', () => {
@@ -878,7 +904,7 @@ $('btn-topview').addEventListener('click', () => {
 
 const keysDown = new Set();
 window.addEventListener('keydown', e => {
-  if(e.target.tagName === 'INPUT') return;
+  if(e.target.tagName === 'INPUT' && (e.target.type === 'number' || e.target.type === 'text')) return;
   keysDown.add(e.code);
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
 });
