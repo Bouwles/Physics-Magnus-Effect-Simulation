@@ -728,6 +728,8 @@ function recordTrajectory(){
   let omega = rawAxis.clone().multiplyScalar(rpm * (2 * Math.PI / 60));
   let quat  = new THREE.Quaternion();
 
+  vel.add(new THREE.Vector3(fxApplied, fyApplied, fzApplied).multiplyScalar(0.01 / mass));
+
   trajectory = [];
   maxHeight  = pos.y;
   trailCount = 0;
@@ -764,8 +766,7 @@ function recordTrajectory(){
 
     if(pos.y > maxHeight) maxHeight = pos.y;
 
-    const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus)
-      .add(new THREE.Vector3(fxApplied, fyApplied, fzApplied)).divideScalar(mass);
+    const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus).divideScalar(mass);
     vel.addScaledVector(accel, SIM_DT);
     pos.addScaledVector(vel, SIM_DT);
     omega.multiplyScalar(Math.max(0, 1.0 - viscosity * SIM_DT));
