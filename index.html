@@ -46,12 +46,25 @@
   .btn:hover { background: rgba(50,50,60,0.98); }
   .btn.active { background: rgba(30,80,120,0.98); border-color: #64c8ff; }
 
-  #toggle-panel-btn {
+  #tl-bar {
     position: fixed;
     top: 12px;
     left: 14px;
     z-index: 30;
+    display: flex;
+    gap: 8px;
   }
+  #preset-select {
+    background: rgba(20,20,20,0.95);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 5px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+  }
+  #preset-select option { background: #111; }
 
   #panel {
     position: fixed;
@@ -185,7 +198,14 @@
 
 <div id="canvas-container"></div>
 
-<button class="btn" id="toggle-panel-btn">☰ Panel</button>
+<div id="tl-bar">
+  <button class="btn" id="toggle-panel-btn">☰ Panel</button>
+  <select id="preset-select">
+    <option value="">Presets</option>
+    <option value="default">Default</option>
+    <option value="roberto">Roberto Carlos</option>
+  </select>
+</div>
 
 <div id="top-bar">
   <button class="btn" id="btn-launch">▶ Launch</button>
@@ -269,6 +289,9 @@
     <div class="row"><label>Vy</label><input type="number" id="p-vy" value="5" step="0.5"></div>
     <div class="row"><label>Vz</label><input type="number" id="p-vz" value="0" step="0.5"></div>
     <div class="row"><input type="checkbox" id="p-vel-link"><span class="check-label">Link all axes</span></div>
+    <div class="row"><label>Kick Angle X (°)</label><input type="number" id="p-kax" value="10" step="0.1"></div>
+    <div class="row"><label>Kick Angle Y (°)</label><input type="number" id="p-kay" value="0" step="0.1"></div>
+    <div class="row"><label>Kick Angle Z (°)</label><input type="number" id="p-kaz" value="0" step="0.1"></div>
   </div>
 
   <div class="section-header" data-target="sec-rot">
@@ -728,6 +751,21 @@ function recordTrajectory(){
   let omega = rawAxis.clone().multiplyScalar(rpm * (2 * Math.PI / 60));
   let quat  = new THREE.Quaternion();
 
+  const kax = numVal('p-kax') * Math.PI / 180;
+  const kay = numVal('p-kay') * Math.PI / 180;
+  const kaz = numVal('p-kaz') * Math.PI / 180;
+  if(kax !== 0 || kay !== 0 || kaz !== 0){
+    const spd = vel.length() || 1;
+    const vx0 = spd * Math.cos(kax) * Math.cos(kay);
+    const vy0 = spd * Math.sin(kax);
+    const vz0 = spd * Math.cos(kax) * Math.sin(kay);
+    vel.set(vx0, vy0, vz0);
+    if(Math.abs(kaz) > 1e-6){
+      const fwd = new THREE.Vector3(vx0, vy0, vz0).normalize();
+      vel.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(fwd, kaz));
+    }
+  }
+
   vel.add(new THREE.Vector3(fxApplied, fyApplied, fzApplied).multiplyScalar(0.01 / mass));
 
   trajectory = [];
@@ -1146,6 +1184,34 @@ $('s-ground-opacity').addEventListener('input', function(){
   const v = parseInt(this.value);
   $('s-ground-opacity-val').textContent = v;
   groundTrailMat.size = v;
+});
+
+const PRESETS = {
+  default: {
+    'p-rho':1.225,'p-mass':0.43,'p-radius':0.11,'p-gravity':9.81,
+    'p-viscosity':0.02,'p-cl':0.35,'p-cd':0.25,'p-drag-scale':1,
+    'p-fx':0,'p-fy':0,'p-fz':0,
+    'p-px':0,'p-py':1,'p-pz':0,
+    'p-vx':30,'p-vy':5,'p-vz':0,
+    'p-kax':10,'p-kay':0,'p-kaz':0,
+    'p-rpm':600,'p-ax':0,'p-ay':1,'p-az':0
+  },
+  roberto: {
+    'p-rho':1.197,'p-mass':0.43,'p-radius':0.1105,'p-gravity':9.81,
+    'p-viscosity':0.000018,'p-cl':0.08,'p-cd':0.25,'p-drag-scale':1,
+    'p-fx':0,'p-fy':0,'p-fz':0,
+    'p-px':0,'p-py':0.3,'p-pz':0,
+    'p-vx':36.15,'p-vy':6.27,'p-vz':3.2,
+    'p-kax':9.84,'p-kay':5,'p-kaz':0,
+    'p-rpm':840,'p-ax':0,'p-ay':1,'p-az':0
+  }
+};
+
+$('preset-select').addEventListener('change', function(){
+  const p = PRESETS[this.value];
+  if(!p) return;
+  Object.entries(p).forEach(([id, val]) => { const el = $(id); if(el) el.value = val; });
+  this.value = '';
 });
 
 $('hud-speed-slider').addEventListener('input', function(){
