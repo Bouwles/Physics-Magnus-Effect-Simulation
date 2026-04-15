@@ -240,6 +240,16 @@
     <div class="row"><label>Viscosity μ</label><input type="number" id="p-viscosity" value="0.02" step="0.001"></div>
     <div class="row"><label>Lift Coeff CL</label><input type="number" id="p-cl" value="0.35" step="0.01"></div>
     <div class="row"><label>Drag Coeff Cd</label><input type="number" id="p-cd" value="0.25" step="0.01"></div>
+    <div class="row"><label>Drag Scale</label><input type="number" id="p-drag-scale" value="1" step="0.05"></div>
+  </div>
+
+  <div class="section-header" data-target="sec-force">
+    <span>▼ Applied Force (N)</span>
+  </div>
+  <div class="section-body" id="sec-force">
+    <div class="row"><label>Fx</label><input type="number" id="p-fx" value="0" step="0.1"></div>
+    <div class="row"><label>Fy</label><input type="number" id="p-fy" value="0" step="0.1"></div>
+    <div class="row"><label>Fz</label><input type="number" id="p-fz" value="0" step="0.1"></div>
   </div>
 
   <div class="section-header" data-target="sec-pos">
@@ -665,13 +675,12 @@ scene.add(groundTrailLine);
 
 let trailCount = 0;
 
-// ── Playback system ───────────────────────────────────────────────────────────
-const SIM_DT     = 0.005;   // physics recording step (s)
-let trajectory   = [];      // pre-recorded frames
-let playbackT    = 0;       // continuous frame index (float)
-let playbackSpeed = 1.0;    // 1 = realtime, 0.05 = extreme slo-mo
+const SIM_DT = 0.005;
+let trajectory = [];
+let playbackT = 0;
+let playbackSpeed = 1.0;
 let scrubDragging = false;
-let maxHeight    = 0;
+let maxHeight = 0;
 
 function resetTrail(){
   trailCount = 0;
@@ -704,6 +713,10 @@ function recordTrajectory(){
   const viscosity = numVal('p-viscosity') || 0.02;
   const CL        = numVal('p-cl')        || 0.35;
   const Cd        = numVal('p-cd')        || 0.25;
+  const dragScale = parseFloat($('p-drag-scale').value) || 1.0;
+  const fxApplied = numVal('p-fx');
+  const fyApplied = numVal('p-fy');
+  const fzApplied = numVal('p-fz');
   const A = Math.PI * radius * radius;
 
   let pos  = new THREE.Vector3(numVal('p-px'), numVal('p-py'), numVal('p-pz'));
@@ -724,7 +737,7 @@ function recordTrajectory(){
     const fGrav = new THREE.Vector3(0, -mass * gravity, 0);
     const fDrag = new THREE.Vector3();
     if(speed > 1e-6){
-      fDrag.copy(vel).normalize().multiplyScalar(-0.5 * rho * Cd * A * speed * speed);
+      fDrag.copy(vel).normalize().multiplyScalar(-0.5 * rho * Cd * A * speed * speed * dragScale);
     }
     const fMagnus = new THREE.Vector3();
     const omLen = omega.length();
@@ -751,8 +764,8 @@ function recordTrajectory(){
 
     if(pos.y > maxHeight) maxHeight = pos.y;
 
-    // Integrate
-    const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus).divideScalar(mass);
+    const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus)
+      .add(new THREE.Vector3(fxApplied, fyApplied, fzApplied)).divideScalar(mass);
     vel.addScaledVector(accel, SIM_DT);
     pos.addScaledVector(vel, SIM_DT);
     omega.multiplyScalar(Math.max(0, 1.0 - viscosity * SIM_DT));
@@ -835,8 +848,6 @@ function updatePhysics(dt){
 
   const omegaLen = s.omega.length();
   if(omegaLen > 1e-6 && speed > 1e-6){
-    // Magnus: F = 0.5 * rho * CL * A * |v| * (omega_hat × v)
-    // Using normalised spin axis keeps curve direction stable as spin decays
     const omegaHat = s.omega.clone().normalize();
     const magnusDir = new THREE.Vector3().crossVectors(omegaHat, s.vel);
     const magnusMag = 0.5 * rho * CL * A * speed;
@@ -851,7 +862,6 @@ function updatePhysics(dt){
   s.vel.addScaledVector(accel, dt);
   s.pos.addScaledVector(s.vel, dt);
 
-  // Spin decay (air friction on ball surface)
   const decayFactor = 1.0 - viscosity * dt;
   s.omega.multiplyScalar(Math.max(0, decayFactor));
 
@@ -1137,7 +1147,6 @@ $('s-ground-opacity').addEventListener('input', function(){
   groundTrailMat.size = v;
 });
 
-// Slow-mo slider
 $('hud-speed-slider').addEventListener('input', function(){
   playbackSpeed = parseFloat(this.value);
   const label = playbackSpeed < 1
@@ -1146,7 +1155,6 @@ $('hud-speed-slider').addEventListener('input', function(){
   $('hud-speed-label').textContent = label;
 });
 
-// Timeline scrubber
 $('hud-scrub').addEventListener('mousedown',  () => { scrubDragging = true; });
 $('hud-scrub').addEventListener('touchstart', () => { scrubDragging = true; }, {passive:true});
 $('hud-scrub').addEventListener('input', function(){
