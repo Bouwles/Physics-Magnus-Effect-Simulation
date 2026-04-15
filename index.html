@@ -201,8 +201,7 @@
 <div id="tl-bar">
   <button class="btn" id="toggle-panel-btn">☰ Panel</button>
   <select id="preset-select">
-    <option value="">Presets</option>
-    <option value="default">Default</option>
+    <option value="default" selected>Default</option>
     <option value="roberto">Roberto Carlos</option>
   </select>
 </div>
@@ -232,6 +231,7 @@
   <div class="hud-row"><span class="hud-lbl">Spin Axis Z</span><span class="hud-val" id="hud-az">0.00</span></div>
   <hr class="hud-divider">
   <div class="hud-row"><span class="hud-lbl">Max Height</span><span class="hud-val" id="hud-maxh">—</span></div>
+  <div class="hud-row"><span class="hud-lbl">Horiz. Deviation</span><span class="hud-val" id="hud-horizdev">—</span></div>
   <hr class="hud-divider">
   <div class="hud-row" style="gap:6px;align-items:center">
     <span class="hud-lbl" style="white-space:nowrap;flex:0 0 auto">Slow-Mo</span>
@@ -704,6 +704,8 @@ let playbackT = 0;
 let playbackSpeed = 1.0;
 let scrubDragging = false;
 let maxHeight = 0;
+let launchPosH = new THREE.Vector2();
+let launchDirH = new THREE.Vector2();
 
 function resetTrail(){
   trailCount = 0;
@@ -767,6 +769,10 @@ function recordTrajectory(){
   }
 
   vel.add(new THREE.Vector3(fxApplied, fyApplied, fzApplied).multiplyScalar(0.01 / mass));
+
+  launchPosH.set(pos.x, pos.z);
+  launchDirH.set(vel.x, vel.z);
+  if(launchDirH.length() > 1e-6) launchDirH.normalize(); else launchDirH.set(1, 0);
 
   trajectory = [];
   maxHeight  = pos.y;
@@ -969,6 +975,14 @@ function updateHUD(){
   $('hud-pz').textContent    = s.pos.z.toFixed(2) + ' m';
   $('hud-time').textContent  = s.time.toFixed(2) + ' s';
   $('hud-maxh').textContent  = maxHeight > 0 ? maxHeight.toFixed(2) + ' m' : '—';
+  if(trajectory.length > 0){
+    const dp = new THREE.Vector2(s.pos.x - launchPosH.x, s.pos.z - launchPosH.y);
+    const along = dp.dot(launchDirH);
+    const dev = Math.sqrt(Math.max(0, dp.lengthSq() - along * along));
+    $('hud-horizdev').textContent = dev.toFixed(2) + ' m';
+  } else {
+    $('hud-horizdev').textContent = '—';
+  }
   const omegaLen = s.omega.length();
   if(omegaLen > 1e-6){
     const ax = s.omega.clone().normalize();
@@ -1026,6 +1040,7 @@ function reset(){
   $('hud-scrub').max   = 1000;
   $('hud-scrub-time').textContent = '0.0s';
   $('hud-maxh').textContent = '—';
+  $('hud-horizdev').textContent = '—';
   resetTrail();
   setStatus('READY');
 }
@@ -1198,9 +1213,9 @@ const PRESETS = {
   },
   roberto: {
     'p-rho':1.197,'p-mass':0.43,'p-radius':0.1105,'p-gravity':9.81,
-    'p-viscosity':0.000018,'p-cl':0.08,'p-cd':0.25,'p-drag-scale':1,
-    'p-fx':0,'p-fy':0,'p-fz':0,
-    'p-px':0,'p-py':0.3,'p-pz':0,
+    'p-viscosity':0.000018,'p-cl':0.066,'p-cd':0.25,'p-drag-scale':1,
+    'p-fx':315.5,'p-fy':54.72,'p-fz':0,
+    'p-px':0,'p-py':0,'p-pz':0,
     'p-vx':36.15,'p-vy':6.27,'p-vz':3.2,
     'p-kax':9.84,'p-kay':5,'p-kaz':0,
     'p-rpm':840,'p-ax':0,'p-ay':1,'p-az':0
@@ -1211,7 +1226,6 @@ $('preset-select').addEventListener('change', function(){
   const p = PRESETS[this.value];
   if(!p) return;
   Object.entries(p).forEach(([id, val]) => { const el = $(id); if(el) el.value = val; });
-  this.value = '';
 });
 
 $('hud-speed-slider').addEventListener('input', function(){
