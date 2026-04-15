@@ -231,7 +231,8 @@
   <div class="hud-row"><span class="hud-lbl">Spin Axis Z</span><span class="hud-val" id="hud-az">0.00</span></div>
   <hr class="hud-divider">
   <div class="hud-row"><span class="hud-lbl">Max Height</span><span class="hud-val" id="hud-maxh">—</span></div>
-  <div class="hud-row"><span class="hud-lbl">Horiz. Deviation</span><span class="hud-val" id="hud-horizdev">—</span></div>
+  <div class="hud-row"><span class="hud-lbl">Max Right (Z)</span><span class="hud-val" id="hud-devright">—</span></div>
+  <div class="hud-row"><span class="hud-lbl">Max Left (Z)</span><span class="hud-val" id="hud-devleft">—</span></div>
   <hr class="hud-divider">
   <div class="hud-row" style="gap:6px;align-items:center">
     <span class="hud-lbl" style="white-space:nowrap;flex:0 0 auto">Slow-Mo</span>
@@ -706,6 +707,8 @@ let scrubDragging = false;
 let maxHeight = 0;
 let launchPosH = new THREE.Vector2();
 let launchDirH = new THREE.Vector2();
+let maxDevRight = 0;
+let maxDevLeft  = 0;
 
 function resetTrail(){
   trailCount = 0;
@@ -776,6 +779,8 @@ function recordTrajectory(){
 
   trajectory = [];
   maxHeight  = pos.y;
+  maxDevRight = 0;
+  maxDevLeft  = 0;
   trailCount = 0;
 
   for(let i = 0; i < 20000; i++){
@@ -809,6 +814,9 @@ function recordTrajectory(){
     });
 
     if(pos.y > maxHeight) maxHeight = pos.y;
+    const dz = pos.z - launchPosH.y;
+    if(dz > maxDevRight) maxDevRight = dz;
+    if(-dz > maxDevLeft) maxDevLeft = -dz;
 
     const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus).divideScalar(mass);
     vel.addScaledVector(accel, SIM_DT);
@@ -975,14 +983,8 @@ function updateHUD(){
   $('hud-pz').textContent    = s.pos.z.toFixed(2) + ' m';
   $('hud-time').textContent  = s.time.toFixed(2) + ' s';
   $('hud-maxh').textContent  = maxHeight > 0 ? maxHeight.toFixed(2) + ' m' : '—';
-  if(trajectory.length > 0){
-    const dp = new THREE.Vector2(s.pos.x - launchPosH.x, s.pos.z - launchPosH.y);
-    const along = dp.dot(launchDirH);
-    const dev = Math.sqrt(Math.max(0, dp.lengthSq() - along * along));
-    $('hud-horizdev').textContent = dev.toFixed(2) + ' m';
-  } else {
-    $('hud-horizdev').textContent = '—';
-  }
+  $('hud-devright').textContent = trajectory.length > 0 ? maxDevRight.toFixed(2) + ' m' : '—';
+  $('hud-devleft').textContent  = trajectory.length > 0 ? maxDevLeft.toFixed(2)  + ' m' : '—';
   const omegaLen = s.omega.length();
   if(omegaLen > 1e-6){
     const ax = s.omega.clone().normalize();
@@ -1040,7 +1042,8 @@ function reset(){
   $('hud-scrub').max   = 1000;
   $('hud-scrub-time').textContent = '0.0s';
   $('hud-maxh').textContent = '—';
-  $('hud-horizdev').textContent = '—';
+  $('hud-devright').textContent = '—';
+  $('hud-devleft').textContent  = '—';
   resetTrail();
   setStatus('READY');
 }
