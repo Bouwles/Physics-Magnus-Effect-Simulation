@@ -210,6 +210,19 @@
   <div class="hud-row"><span class="hud-lbl">Spin Axis X</span><span class="hud-val" id="hud-ax">0.00</span></div>
   <div class="hud-row"><span class="hud-lbl">Spin Axis Y</span><span class="hud-val" id="hud-ay">0.00</span></div>
   <div class="hud-row"><span class="hud-lbl">Spin Axis Z</span><span class="hud-val" id="hud-az">0.00</span></div>
+  <hr class="hud-divider">
+  <div class="hud-row"><span class="hud-lbl">Max Height</span><span class="hud-val" id="hud-maxh">—</span></div>
+  <hr class="hud-divider">
+  <div class="hud-row" style="gap:6px;align-items:center">
+    <span class="hud-lbl" style="white-space:nowrap;flex:0 0 auto">Slow-Mo</span>
+    <input type="range" id="hud-speed-slider" min="0.05" max="1" step="0.05" value="1" style="flex:1;accent-color:#64c8ff;cursor:pointer;height:4px">
+    <span class="hud-val" id="hud-speed-label" style="flex:0 0 30px;text-align:right">1×</span>
+  </div>
+  <div class="hud-row" style="gap:6px;align-items:center;margin-top:4px">
+    <span class="hud-lbl" style="white-space:nowrap;flex:0 0 auto">Timeline</span>
+    <input type="range" id="hud-scrub" min="0" max="1000" step="1" value="0" style="flex:1;accent-color:#64c8ff;cursor:pointer;height:4px">
+    <span class="hud-val" id="hud-scrub-time" style="flex:0 0 34px;text-align:right">0.0s</span>
+  </div>
 </div>
 
 <div id="credit">Made by Richard Abou Jamra</div>
@@ -224,8 +237,9 @@
     <div class="row"><label>Mass (kg)</label><input type="number" id="p-mass" value="0.43" step="0.01"></div>
     <div class="row"><label>Radius (m)</label><input type="number" id="p-radius" value="0.11" step="0.01"></div>
     <div class="row"><label>Gravity (m/s²)</label><input type="number" id="p-gravity" value="9.81" step="0.01"></div>
-    <div class="row"><label>Viscosity μ</label><input type="number" id="p-viscosity" value="0.05" step="0.001"></div>
-    <div class="row"><label>Lift Coeff CL</label><input type="number" id="p-cl" value="0.33" step="0.01"></div>
+    <div class="row"><label>Viscosity μ</label><input type="number" id="p-viscosity" value="0.02" step="0.001"></div>
+    <div class="row"><label>Lift Coeff CL</label><input type="number" id="p-cl" value="0.35" step="0.01"></div>
+    <div class="row"><label>Drag Coeff Cd</label><input type="number" id="p-cd" value="0.25" step="0.01"></div>
   </div>
 
   <div class="section-header" data-target="sec-pos">
@@ -241,8 +255,8 @@
     <span>▼ Velocity (m/s)</span>
   </div>
   <div class="section-body" id="sec-vel">
-    <div class="row"><label>Vx</label><input type="number" id="p-vx" value="20" step="0.5"></div>
-    <div class="row"><label>Vy</label><input type="number" id="p-vy" value="10" step="0.5"></div>
+    <div class="row"><label>Vx</label><input type="number" id="p-vx" value="30" step="0.5"></div>
+    <div class="row"><label>Vy</label><input type="number" id="p-vy" value="5" step="0.5"></div>
     <div class="row"><label>Vz</label><input type="number" id="p-vz" value="0" step="0.5"></div>
     <div class="row"><input type="checkbox" id="p-vel-link"><span class="check-label">Link all axes</span></div>
   </div>
@@ -251,7 +265,7 @@
     <span>▼ Rotation</span>
   </div>
   <div class="section-body" id="sec-rot">
-    <div class="row"><label>Angular Vel (rpm)</label><input type="number" id="p-rpm" value="1500" step="10"></div>
+    <div class="row"><label>Angular Vel (rpm)</label><input type="number" id="p-rpm" value="600" step="10"></div>
     <div class="row"><label>Axis X</label><input type="number" id="p-ax" value="0" step="0.1"></div>
     <div class="row"><label>Axis Y</label><input type="number" id="p-ay" value="1" step="0.1"></div>
     <div class="row"><label>Axis Z</label><input type="number" id="p-az" value="0" step="0.1"></div>
@@ -651,6 +665,14 @@ scene.add(groundTrailLine);
 
 let trailCount = 0;
 
+// ── Playback system ───────────────────────────────────────────────────────────
+const SIM_DT     = 0.005;   // physics recording step (s)
+let trajectory   = [];      // pre-recorded frames
+let playbackT    = 0;       // continuous frame index (float)
+let playbackSpeed = 1.0;    // 1 = realtime, 0.05 = extreme slo-mo
+let scrubDragging = false;
+let maxHeight    = 0;
+
 function resetTrail(){
   trailCount = 0;
   trailGeo.setDrawRange(0, 0);
@@ -674,6 +696,110 @@ function addTrailPoint(x, y, z){
   groundTrailGeo.attributes.position.needsUpdate = true;
 }
 
+function recordTrajectory(){
+  const rho       = numVal('p-rho')       || 1.225;
+  const mass      = numVal('p-mass')      || 0.43;
+  const radius    = numVal('p-radius')    || 0.11;
+  const gravity   = numVal('p-gravity')   || 9.81;
+  const viscosity = numVal('p-viscosity') || 0.02;
+  const CL        = numVal('p-cl')        || 0.35;
+  const Cd        = numVal('p-cd')        || 0.25;
+  const A = Math.PI * radius * radius;
+
+  let pos  = new THREE.Vector3(numVal('p-px'), numVal('p-py'), numVal('p-pz'));
+  let vel  = new THREE.Vector3(numVal('p-vx'), numVal('p-vy'), numVal('p-vz'));
+  const rpm = numVal('p-rpm');
+  const rawAxis = new THREE.Vector3(numVal('p-ax'), numVal('p-ay'), numVal('p-az'));
+  if(rawAxis.length() < 1e-6) rawAxis.set(0, 1, 0);
+  rawAxis.normalize();
+  let omega = rawAxis.clone().multiplyScalar(rpm * (2 * Math.PI / 60));
+  let quat  = new THREE.Quaternion();
+
+  trajectory = [];
+  maxHeight  = pos.y;
+  trailCount = 0;
+
+  for(let i = 0; i < 20000; i++){
+    const speed = vel.length();
+    const fGrav = new THREE.Vector3(0, -mass * gravity, 0);
+    const fDrag = new THREE.Vector3();
+    if(speed > 1e-6){
+      fDrag.copy(vel).normalize().multiplyScalar(-0.5 * rho * Cd * A * speed * speed);
+    }
+    const fMagnus = new THREE.Vector3();
+    const omLen = omega.length();
+    if(omLen > 1e-6 && speed > 1e-6){
+      const magnusDir = new THREE.Vector3().crossVectors(omega.clone().normalize(), vel);
+      fMagnus.copy(magnusDir).multiplyScalar(0.5 * rho * CL * A * speed);
+    }
+
+    if(i < MAX_TRAIL){
+      trailPositions[i*3]   = pos.x;
+      trailPositions[i*3+1] = pos.y;
+      trailPositions[i*3+2] = pos.z;
+      groundTrailPositions[i*3]   = pos.x;
+      groundTrailPositions[i*3+1] = 0.01;
+      groundTrailPositions[i*3+2] = pos.z;
+      trailCount = i + 1;
+    }
+
+    trajectory.push({
+      pos: pos.clone(), vel: vel.clone(), omega: omega.clone(),
+      fGrav: fGrav.clone(), fDrag: fDrag.clone(), fMagnus: fMagnus.clone(),
+      time: i * SIM_DT, quat: quat.clone()
+    });
+
+    if(pos.y > maxHeight) maxHeight = pos.y;
+
+    // Integrate
+    const accel = new THREE.Vector3().add(fGrav).add(fDrag).add(fMagnus).divideScalar(mass);
+    vel.addScaledVector(accel, SIM_DT);
+    pos.addScaledVector(vel, SIM_DT);
+    omega.multiplyScalar(Math.max(0, 1.0 - viscosity * SIM_DT));
+    const oLen = omega.length();
+    if(oLen > 1e-6){
+      quat.multiplyQuaternions(
+        new THREE.Quaternion().setFromAxisAngle(omega.clone().normalize(), oLen * SIM_DT),
+        quat
+      );
+    }
+
+    if(pos.y <= 0){
+      pos.y = 0;
+      trajectory.push({ pos: pos.clone(), vel: new THREE.Vector3(), omega: new THREE.Vector3(),
+        fGrav: new THREE.Vector3(), fDrag: new THREE.Vector3(), fMagnus: new THREE.Vector3(),
+        time: (i+1) * SIM_DT, quat: quat.clone() });
+      break;
+    }
+  }
+
+  trailGeo.attributes.position.needsUpdate = true;
+  groundTrailGeo.attributes.position.needsUpdate = true;
+  const scrub = $('hud-scrub');
+  scrub.max   = trajectory.length - 1;
+  scrub.value = 0;
+}
+
+function applyFrame(idx){
+  const frame = trajectory[Math.max(0, Math.min(idx, trajectory.length - 1))];
+  if(!frame) return;
+  const s = simState;
+  s.pos.copy(frame.pos);   s.vel.copy(frame.vel);  s.omega.copy(frame.omega);
+  s.fGrav.copy(frame.fGrav); s.fDrag.copy(frame.fDrag); s.fMagnus.copy(frame.fMagnus);
+  s.time = frame.time;
+  ball.position.copy(frame.pos);
+  ball.quaternion.copy(frame.quat);
+  const visible = Math.min(idx + 1, trailCount);
+  trailGeo.setDrawRange(0, visible);
+  trailGeo.attributes.position.needsUpdate = true;
+  groundTrailGeo.setDrawRange(0, visible);
+  groundTrailGeo.attributes.position.needsUpdate = true;
+  if(!scrubDragging){
+    $('hud-scrub').value = idx;
+    $('hud-scrub-time').textContent = frame.time.toFixed(1) + 's';
+  }
+}
+
 let simState = {
   active: false,
   paused: false,
@@ -681,8 +807,8 @@ let simState = {
   vel: new THREE.Vector3(),
   omega: new THREE.Vector3(),
   time: 0,
-  rho: 1.225, mass: 0.43, radius: 0.11, gravity: 9.81, viscosity: 0.05,
-  Cd: 0.47, CL: 0.33,
+  rho: 1.225, mass: 0.43, radius: 0.11, gravity: 9.81, viscosity: 0.02,
+  Cd: 0.25, CL: 0.35,
   area: 0,
   fGrav: new THREE.Vector3(),
   fDrag: new THREE.Vector3(),
@@ -707,9 +833,17 @@ function updatePhysics(dt){
     s.fDrag.set(0, 0, 0);
   }
 
-  const omegaXvel = new THREE.Vector3().crossVectors(s.omega, s.vel);
-  const magnusMag = 0.5 * rho * CL * A * radius;
-  s.fMagnus.copy(omegaXvel).multiplyScalar(magnusMag);
+  const omegaLen = s.omega.length();
+  if(omegaLen > 1e-6 && speed > 1e-6){
+    // Magnus: F = 0.5 * rho * CL * A * |v| * (omega_hat × v)
+    // Using normalised spin axis keeps curve direction stable as spin decays
+    const omegaHat = s.omega.clone().normalize();
+    const magnusDir = new THREE.Vector3().crossVectors(omegaHat, s.vel);
+    const magnusMag = 0.5 * rho * CL * A * speed;
+    s.fMagnus.copy(magnusDir).multiplyScalar(magnusMag);
+  } else {
+    s.fMagnus.set(0, 0, 0);
+  }
 
   const fNet = new THREE.Vector3().add(s.fGrav).add(s.fDrag).add(s.fMagnus);
   const accel = fNet.divideScalar(mass);
@@ -717,12 +851,9 @@ function updatePhysics(dt){
   s.vel.addScaledVector(accel, dt);
   s.pos.addScaledVector(s.vel, dt);
 
+  // Spin decay (air friction on ball surface)
   const decayFactor = 1.0 - viscosity * dt;
   s.omega.multiplyScalar(Math.max(0, decayFactor));
-
-  const I = 0.4 * mass * radius * radius;
-  const tauPrecess = new THREE.Vector3().crossVectors(s.vel, s.omega).multiplyScalar(rho * CL * A * radius * radius / I);
-  s.omega.addScaledVector(tauPrecess, dt);
 
   const omegaMag = s.omega.length();
   if(omegaMag > 1e-6){
@@ -788,6 +919,7 @@ function updateHUD(){
   $('hud-py').textContent    = s.pos.y.toFixed(2) + ' m';
   $('hud-pz').textContent    = s.pos.z.toFixed(2) + ' m';
   $('hud-time').textContent  = s.time.toFixed(2) + ' s';
+  $('hud-maxh').textContent  = maxHeight > 0 ? maxHeight.toFixed(2) + ' m' : '—';
   const omegaLen = s.omega.length();
   if(omegaLen > 1e-6){
     const ax = s.omega.clone().normalize();
@@ -815,26 +947,13 @@ function setStatus(text){
 
 function launch(){
   const s = simState;
-  s.rho       = numVal('p-rho');
-  s.mass      = numVal('p-mass');
-  s.radius    = numVal('p-radius');
-  s.gravity   = numVal('p-gravity');
-  s.viscosity = numVal('p-viscosity');
-  s.CL        = numVal('p-cl') || 0.33;
-  s.pos.set(numVal('p-px'), numVal('p-py'), numVal('p-pz'));
-  s.vel.set(numVal('p-vx'), numVal('p-vy'), numVal('p-vz'));
-  const rpm = numVal('p-rpm');
-  const omegaMag = rpm * (2 * Math.PI / 60);
-  const axis = new THREE.Vector3(numVal('p-ax'), numVal('p-ay'), numVal('p-az'));
-  if(axis.length() < 1e-6) axis.set(0, 1, 0);
-  axis.normalize();
-  s.omega.copy(axis).multiplyScalar(omegaMag);
+  s.radius = numVal('p-radius') || 0.11;
   ball.scale.setScalar(s.radius);
-  resetTrail();
-  s.time = 0;
-  s.active = true;
-  s.paused = false;
-  ball.position.copy(s.pos);
+  recordTrajectory();
+  playbackT  = 0;
+  s.active   = true;
+  s.paused   = false;
+  applyFrame(0);
   setStatus('IN FLIGHT');
 }
 
@@ -851,24 +970,36 @@ function reset(){
   simState.fDrag.set(0,0,0);
   simState.fMagnus.set(0,0,0);
   [arrowVelocity,arrowGravity,arrowDrag,arrowMagnus,arrowSpinAxis].forEach(a=>a.visible=false);
+  trajectory = [];
+  playbackT  = 0;
+  maxHeight  = 0;
+  $('hud-scrub').value = 0;
+  $('hud-scrub').max   = 1000;
+  $('hud-scrub-time').textContent = '0.0s';
+  $('hud-maxh').textContent = '—';
   resetTrail();
   setStatus('READY');
 }
 
 let lastTimestamp = null;
-const MAX_DT = 0.02;
 
 function render(timestamp){
   requestAnimationFrame(render);
   if(lastTimestamp === null) lastTimestamp = timestamp;
-  const rawDt = (timestamp - lastTimestamp) / 1000;
+  const rawDt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
   lastTimestamp = timestamp;
-  const dt = Math.min(rawDt, MAX_DT);
-  if(simState.active && !simState.paused){
-    updatePhysics(dt);
-    ball.position.copy(simState.pos);
-    addTrailPoint(simState.pos.x, simState.pos.y, simState.pos.z);
+
+  if(simState.active && !simState.paused && !scrubDragging && trajectory.length > 0){
+    playbackT += (rawDt / SIM_DT) * playbackSpeed;
+    const maxIdx = trajectory.length - 1;
+    if(playbackT >= maxIdx){
+      playbackT = maxIdx;
+      simState.active = false;
+      setStatus('LANDED');
+    }
+    applyFrame(Math.floor(playbackT));
   }
+
   updateArrows();
   axesHelper.visible    = $('v-axes').checked;
   trailLine.visible       = $('v-trail').checked;
@@ -1005,6 +1136,29 @@ $('s-ground-opacity').addEventListener('input', function(){
   $('s-ground-opacity-val').textContent = v;
   groundTrailMat.size = v;
 });
+
+// Slow-mo slider
+$('hud-speed-slider').addEventListener('input', function(){
+  playbackSpeed = parseFloat(this.value);
+  const label = playbackSpeed < 1
+    ? (playbackSpeed * 100).toFixed(0) + '%'
+    : '1×';
+  $('hud-speed-label').textContent = label;
+});
+
+// Timeline scrubber
+$('hud-scrub').addEventListener('mousedown',  () => { scrubDragging = true; });
+$('hud-scrub').addEventListener('touchstart', () => { scrubDragging = true; }, {passive:true});
+$('hud-scrub').addEventListener('input', function(){
+  if(!trajectory.length) return;
+  const idx = parseInt(this.value);
+  playbackT = idx;
+  applyFrame(idx);
+  const frame = trajectory[Math.min(idx, trajectory.length - 1)];
+  $('hud-scrub-time').textContent = frame ? frame.time.toFixed(1) + 's' : '0.0s';
+});
+$('hud-scrub').addEventListener('mouseup',  () => { scrubDragging = false; });
+$('hud-scrub').addEventListener('touchend', () => { scrubDragging = false; });
 
 reset();
 requestAnimationFrame(render);
