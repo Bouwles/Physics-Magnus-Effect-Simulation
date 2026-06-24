@@ -9,6 +9,7 @@ An interactive 3D physics simulation of the Magnus Effect.
 This simulation visualises the forces acting on a spinning ball in flight. Gravity, aerodynamic drag, and the Magnus force in real time using accurate SI physics equations. 
 
 **Made by:** Paul Nercessian
+
 **For:** Richard Abou Jamra's Physics Extended Essay
 
 ---
