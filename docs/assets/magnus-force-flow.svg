@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" role="img" aria-labelledby="title desc">
+  <title id="title">Magnus force computation flow</title>
+  <desc id="desc">A flow diagram from UI parameters to force calculation, integration, rendering, and telemetry.</desc>
+  <rect width="1000" height="360" fill="#f7fbfb"/>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" fill="#17323a">
+    <g transform="translate(38 86)">
+      <rect width="176" height="112" rx="8" fill="#ffffff" stroke="#7fb0bd" stroke-width="2"/>
+      <text x="88" y="45" text-anchor="middle" font-weight="700">Inputs</text>
+      <text x="88" y="78" text-anchor="middle" font-size="15">mass, radius,</text>
+      <text x="88" y="98" text-anchor="middle" font-size="15">velocity, spin</text>
+    </g>
+    <g transform="translate(286 86)">
+      <rect width="176" height="112" rx="8" fill="#ffffff" stroke="#7fb0bd" stroke-width="2"/>
+      <text x="88" y="45" text-anchor="middle" font-weight="700">Forces</text>
+      <text x="88" y="78" text-anchor="middle" font-size="15">gravity, drag,</text>
+      <text x="88" y="98" text-anchor="middle" font-size="15">Magnus lift</text>
+    </g>
+    <g transform="translate(534 86)">
+      <rect width="176" height="112" rx="8" fill="#ffffff" stroke="#7fb0bd" stroke-width="2"/>
+      <text x="88" y="45" text-anchor="middle" font-weight="700">Integrator</text>
+      <text x="88" y="78" text-anchor="middle" font-size="15">Euler step with</text>
+      <text x="88" y="98" text-anchor="middle" font-size="15">capped dt</text>
+    </g>
+    <g transform="translate(782 86)">
+      <rect width="176" height="112" rx="8" fill="#ffffff" stroke="#7fb0bd" stroke-width="2"/>
+      <text x="88" y="45" text-anchor="middle" font-weight="700">Output</text>
+      <text x="88" y="78" text-anchor="middle" font-size="15">3D path, vectors,</text>
+      <text x="88" y="98" text-anchor="middle" font-size="15">HUD telemetry</text>
+    </g>
+  </g>
+  <g stroke="#1f778b" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M224 142 H274"/>
+    <path d="M260 128 L276 142 L260 156"/>
+    <path d="M472 142 H522"/>
+    <path d="M508 128 L524 142 L508 156"/>
+    <path d="M720 142 H770"/>
+    <path d="M756 128 L772 142 L756 156"/>
+  </g>
+  <text x="500" y="274" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="800" fill="#17323a">force = gravity + drag + Magnus, recomputed every frame</text>
+  <text x="500" y="310" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" fill="#4b6c74">The app exposes the math through live vectors, trajectory trails, and adjustable parameters.</text>
+</svg>

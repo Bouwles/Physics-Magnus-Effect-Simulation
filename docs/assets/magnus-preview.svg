@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Magnus Effect simulation preview</title>
+  <desc id="desc">A stylized 3D scene showing a spinning ball curving through the air with force vectors and telemetry.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#08111f"/>
+      <stop offset="0.55" stop-color="#132f3c"/>
+      <stop offset="1" stop-color="#1d5142"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.48" stop-color="#d9f0ff"/>
+      <stop offset="1" stop-color="#6aa6c8"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#02060b" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <path d="M0 520 C180 470 310 486 470 530 C660 580 790 565 1200 500 L1200 675 L0 675 Z" fill="#143226"/>
+  <path d="M90 535 C310 480 520 440 730 410 C850 394 980 370 1110 330" fill="none" stroke="#d8f7ff" stroke-width="6" stroke-linecap="round" stroke-dasharray="3 22" opacity="0.65"/>
+  <path d="M112 548 C320 500 520 462 735 428 C860 408 982 383 1108 344" fill="none" stroke="#68e0c9" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  <g transform="translate(708 406)" filter="url(#shadow)">
+    <circle r="78" fill="url(#ball)"/>
+    <path d="M-60 -15 C-15 -48 40 -48 70 -13" fill="none" stroke="#17364b" stroke-width="8" stroke-linecap="round" opacity="0.65"/>
+    <path d="M-52 28 C-5 3 45 4 65 33" fill="none" stroke="#17364b" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+    <path d="M-34 -60 C-2 -18 3 23 -18 68" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+  </g>
+  <g stroke-linecap="round" stroke-width="7" fill="none">
+    <path d="M710 405 L875 330" stroke="#ffcf5a"/>
+    <path d="M875 330 l-31 -1 l18 25" stroke="#ffcf5a"/>
+    <path d="M710 405 L710 560" stroke="#ff6f61"/>
+    <path d="M710 560 l-18 -25 l36 0" stroke="#ff6f61"/>
+    <path d="M710 405 L548 452" stroke="#75d7ff"/>
+    <path d="M548 452 l27 -21 l8 31" stroke="#75d7ff"/>
+  </g>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" fill="#eaf8ff">
+    <text x="72" y="92" font-size="46" font-weight="800">Magnus Effect Simulator</text>
+    <text x="74" y="132" font-size="22" fill="#a9c8d0">Spin, drag, gravity, and lift vectors in an interactive Three.js scene.</text>
+    <g transform="translate(72 178)">
+      <rect width="300" height="170" rx="8" fill="#07101a" opacity="0.78" stroke="#35566a"/>
+      <text x="22" y="40" font-size="18" fill="#9fc0ca">LIVE TELEMETRY</text>
+      <text x="22" y="78" font-size="28" font-weight="700">Speed 22.8 m/s</text>
+      <text x="22" y="112" font-size="22" fill="#d6eef5">Spin 48.0 rad/s</text>
+      <text x="22" y="143" font-size="22" fill="#d6eef5">Magnus +3.7 N</text>
+    </g>
+  </g>
+</svg>
